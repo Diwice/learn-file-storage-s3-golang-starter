@@ -5,6 +5,7 @@ import (
 	"io"
 	"fmt"
 	"mime"
+	"strings"
 	"net/http"
 	"path/filepath"
 	"encoding/json"
@@ -50,7 +51,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	if m_type == "" {
 		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for the file", fmt.Errorf("No Content-Type"))
 		return
-	} else if m_type != "image/jpeg" || m_type != "image/png" {
+	} else if !strings.Contains(m_type, "image/jpeg") && !strings.Contains(m_type, "image/png") {
 		respondWithError(w, http.StatusBadRequest, "Unallowed Content-Type", fmt.Errorf("Only JPEG or PNG file types allowed"))
 		return
 	}
