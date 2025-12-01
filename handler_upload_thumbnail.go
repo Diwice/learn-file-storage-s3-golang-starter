@@ -5,10 +5,13 @@ import (
 	"io"
 	"fmt"
 	"mime"
+	"bytes"
 	"strings"
 	"net/http"
+	"crypto/rand"
 	"path/filepath"
 	"encoding/json"
+	"encoding/base64"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -71,7 +74,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	file_ext := extensions[0]
-	new_path := filepath.Join(cfg.assetsRoot, videoIDString)
+	file_name := createRandFilename()
+	new_path := filepath.Join(cfg.assetsRoot, file_name)
 
 	new_file, err := os.Create(new_path+file_ext)
 	if err != nil {
@@ -85,7 +89,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	thumb_url := fmt.Sprintf("http://localhost:%v/assets/%v%v", cfg.port, videoIDString, file_ext)
+	thumb_url := fmt.Sprintf("http://localhost:%v/assets/%v%v", cfg.port, file_name, file_ext)
 	video_md.ThumbnailURL = &thumb_url
 
 	err = cfg.db.UpdateVideo(video_md)
@@ -101,4 +105,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	respondWithJSON(w, http.StatusOK, formatted_md)
+}
+
+func createRandFilename() string {
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	res_buf := bytes.NewBuffer([]byte{})
+
+	encoder := base64.NewEncoder(base64.RawURLEncoding, res_buf)
+	encoder.Write(key)
+	encoder.Close()
+
+	return res_buf.String()
 }
