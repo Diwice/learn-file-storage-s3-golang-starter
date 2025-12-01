@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"encoding/json"
-	//"encoding/base64"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -51,13 +50,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	if m_type == "" {
 		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for the file", fmt.Errorf("No Content-Type"))
 		return
-	}
-	/*
-	b, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't read the file data", err)
+	} else if m_type != "image/jpeg" || m_type != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Unallowed Content-Type", fmt.Errorf("Only JPEG or PNG file types allowed"))
 		return
-	}*/
+	}
 
 	video_md, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -68,8 +64,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// enc_data := base64.StdEncoding.EncodeToString(b)
-	// data_url := fmt.Sprintf("data:[%v][;base64],%v", m_type, enc_data)
 	extensions, err := mime.ExtensionsByType(m_type)
 	if err != nil || len(extensions) == 0 {
 		respondWithError(w, http.StatusBadRequest, "Unknown media type", fmt.Errorf("No matched extensions for media type"))
