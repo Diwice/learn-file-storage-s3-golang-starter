@@ -1,11 +1,14 @@
 package main
 
 import (
+	"os"
 	"io"
 	"fmt"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"encoding/json"
-	"encoding/base64"
+	//"encoding/base64"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -49,12 +52,12 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for the file", fmt.Errorf("No Content-Type"))
 		return
 	}
-
+	/*
 	b, err := io.ReadAll(file)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't read the file data", err)
 		return
-	}
+	}*/
 
 	video_md, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -65,9 +68,30 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	enc_data := base64.StdEncoding.EncodeToString(b)
-	data_url := fmt.Sprintf("data:[%v][;base64],%v", m_type, enc_data)
-	video_md.ThumbnailURL = &data_url
+	// enc_data := base64.StdEncoding.EncodeToString(b)
+	// data_url := fmt.Sprintf("data:[%v][;base64],%v", m_type, enc_data)
+	extensions, err := mime.ExtensionsByType(m_type)
+	if err != nil || len(extensions) == 0 {
+		respondWithError(w, http.StatusBadRequest, "Unknown media type", fmt.Errorf("No matched extensions for media type"))
+		return
+	}
+	file_ext := extensions[0]
+	new_path := filepath.Join(cfg.assetsRoot, videoIDString)
+
+	new_file, err := os.Create(new_path+file_ext)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create the file", err)
+		return
+	}
+
+	_, err = io.Copy(new_file, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't write the file", err)
+		return
+	}
+
+	thumb_url := fmt.Sprintf("http://localhost:%v/assets/%v%v", cfg.port, videoIDString, file_ext)
+	video_md.ThumbnailURL = &thumb_url
 
 	err = cfg.db.UpdateVideo(video_md)
 	if err != nil {
