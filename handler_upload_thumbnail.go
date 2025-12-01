@@ -1,8 +1,10 @@
 package main
 
 import (
+	"io"
 	"fmt"
 	"net/http"
+	"encoding/json"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -31,7 +33,58 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
-	// TODO: implement the upload here
+	const maxMemory = 10 << 20
+	r.ParseMultipartForm(maxMemory)
 
-	respondWithJSON(w, http.StatusOK, struct{}{})
+	file, header, err := r.FormFile("thumbnail")
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		return
+	}
+	defer file.Close()
+
+	m_type := header.Header.Get("Content-Type")
+	if m_type == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for the file", fmt.Errorf("No Content-Type"))
+		return
+	}
+
+	b, err := io.ReadAll(file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't read the file data", err)
+		return
+	}
+
+	video_md, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't fetch the video metadata", err)
+		return
+	} else if video_md.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "You are not the owner of the video", err)
+		return
+	}
+
+	new_thumbnail := thumbnail{
+		data:      b,
+		mediaType: m_type,
+	}
+
+	videoThumbnails[video_md.ID] = new_thumbnail
+
+	new_url := fmt.Sprintf("http://localhost:%v/api/thumbnails/%v", cfg.port, video_md.ID)
+	video_md.ThumbnailURL = &new_url
+
+	err = cfg.db.UpdateVideo(video_md)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update video thumbnail", err)
+		return
+	}
+
+	formatted_md, err := json.Marshal(video_md)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't marshal the return data", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, formatted_md)
 }
