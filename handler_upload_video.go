@@ -5,6 +5,8 @@ import (
 	"io"
 	"fmt"
 	"mime"
+	"bytes"
+	"os/exec"
 	"context"
 	"net/http"
 	"encoding/json"
@@ -83,11 +85,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	aws_fn, err := getVideoAspectRatio(new_file.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't determine prefix", err)
+		return
+	}
+
+	last_fn := aws_fn + file_name
+
 	new_file.Seek(0, io.SeekStart)
 
 	put_params := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
-		Key:         &file_name,
+		Key:         &last_fn,
 		Body:        new_file,
 		ContentType: &mt_type,
 	}
@@ -98,7 +108,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	new_url := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", cfg.s3Bucket, cfg.s3Region, file_name)
+	new_url := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", cfg.s3Bucket, cfg.s3Region, last_fn)
 	video.VideoURL = &new_url
 
 	err = cfg.db.UpdateVideo(video)
@@ -114,4 +124,58 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, formatted_vid)
+}
+
+type Stream struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+type form_probe struct {
+	Streams []Stream `json:"streams"`
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v",
+		"error",
+		"-print_format",
+		"json",
+		"-show_streams",
+		filePath,
+	)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	buf := bytes.NewReader(out)
+
+	var output form_probe
+	decoder := json.NewDecoder(buf)
+	if err := decoder.Decode(&output); err != nil {
+		return "", err
+	}
+
+	var width int
+	var height int
+	for _, stream := range output.Streams {
+		if stream.Width != 0 && stream.Height != 0 {
+			width = stream.Width
+			height = stream.Height
+			break
+		}
+	}
+
+	ratio := float64(width)/float64(height)
+	aspect_ratio := "other/"
+	if ratio >= 1.768 && ratio <= 1.788 {
+		aspect_ratio = "landscape/"
+	} else if ratio >= 0.553 && ratio <= 0.573 {
+		aspect_ratio = "portrait/"
+	}
+
+	return aspect_ratio, nil
 }
