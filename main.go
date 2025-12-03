@@ -25,6 +25,7 @@ type apiConfig struct {
 	s3Client         *s3.Client
 	s3Bucket         string
 	s3Region         string
+	CloudfrontSD    string
 	s3CfDistribution string
 	port             string
 }
@@ -89,6 +90,11 @@ func main() {
 
 	s3Client := s3.NewFromConfig(s3cfg)
 
+	cloudfront_sd := os.Getenv("CFSD")
+	if cloudfront_sd == "" {
+		log.Fatal("Cloudfront SD env var is not set")
+	}
+
 	cfg := apiConfig{
 		db:               db,
 		jwtSecret:        jwtSecret,
@@ -99,6 +105,7 @@ func main() {
 		s3Bucket:         s3Bucket,
 		s3Region:         s3Region,
 		s3CfDistribution: s3CfDistribution,
+		CloudfrontSD:     cloudfront_sd,
 		port:             port,
 	}
 
