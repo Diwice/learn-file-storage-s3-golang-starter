@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"crypto/rand"
 	"path/filepath"
-	"encoding/json"
 	"encoding/base64"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -98,13 +97,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	formatted_md, err := json.Marshal(video_md)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't marshal the return data", err)
-		return
-	}
-
-	respondWithJSON(w, http.StatusOK, formatted_md)
+	respondWithJSON(w, http.StatusOK, video_md)
 }
 
 func createRandFilename() string {
